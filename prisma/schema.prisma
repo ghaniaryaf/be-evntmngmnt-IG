@@ -1,0 +1,338 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  password        String
+  fullName        String
+  role            UserRole  @default(CUSTOMER)
+  profilePicture  String?
+  phoneNumber     String?
+  address         String?
+  referralCode    String    @unique
+  isVerified      Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  eventsCreated   Event[]
+  transactions    Transaction[]
+  reviews         Review[]
+  referralsGiven  Referral[] @relation("Referrer")
+  referralsReceived Referral[] @relation("Referee")
+  points          UserPoint[]
+  coupons         UserCoupon[]
+  notifications   Notification[]
+  attendees       EventAttendee[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  CUSTOMER
+  ORGANIZER
+  ADMIN
+}
+
+model Event {
+  id              String      @id @default(uuid())
+  organizerId     String
+  title           String
+  description     String
+  category        String
+  location        String
+  address         String
+  startDate       DateTime
+  endDate         DateTime
+  imageUrl        String?
+  availableSeats  Int
+  bookedSeats     Int         @default(0)
+  basePrice       Float       @default(0)
+  isPublished     Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  organizer       User        @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  ticketTypes     EventTicketType[]
+  vouchers        EventVoucher[]
+  transactions    Transaction[]
+  reviews         Review[]
+  attendees       EventAttendee[]
+
+  @@map("events")
+}
+
+model EventTicketType {
+  id              String    @id @default(uuid())
+  eventId         String
+  name            String
+  price           Float
+  quantity        Int
+  soldQuantity    Int       @default(0)
+  description     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  event           Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  transactionItems TransactionItem[]
+
+  @@map("event_ticket_types")
+}
+
+model EventVoucher {
+  id                  String        @id @default(uuid())
+  eventId             String
+  code                String        @unique
+  discountType        DiscountType
+  discountValue       Float
+  maxUsage            Int
+  usedCount           Int           @default(0)
+  minPurchaseAmount   Float         @default(0)
+  startDate           DateTime
+  endDate             DateTime
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  // Relations
+  event               Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  transactions        Transaction[]
+
+  @@index([eventId])
+  @@index([code])
+  @@index([startDate, endDate])
+  @@map("event_vouchers")
+}
+
+model Transaction {
+  id                  String            @id @default(uuid())
+  userId              String
+  eventId             String
+  invoiceNumber       String            @unique
+  status              TransactionStatus @default(WAITING_FOR_PAYMENT)
+  totalAmount         Float
+  pointsUsed          Float             @default(0)
+  voucherId           String?
+  voucherDiscount     Float             @default(0)
+  couponId            String?
+  couponDiscount      Float             @default(0)
+  finalAmount         Float
+  expiryTime          DateTime
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  // Relations
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event               Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  voucher             EventVoucher?     @relation(fields: [voucherId], references: [id])
+  coupon              UserCoupon?       @relation(fields: [couponId], references: [id])
+  items               TransactionItem[]
+  payment             TransactionPayment?
+  review              Review?
+  attendee            EventAttendee?
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([status])
+  @@index([expiryTime])
+  @@index([invoiceNumber])
+  @@map("transactions")
+}
+
+enum TransactionStatus {
+  WAITING_FOR_PAYMENT
+  WAITING_FOR_CONFIRMATION
+  DONE
+  REJECTED
+  EXPIRED
+  CANCELED
+}
+
+model TransactionItem {
+  id                String    @id @default(uuid())
+  transactionId     String
+  ticketTypeId      String
+  quantity          Int
+  pricePerTicket    Float
+  subtotal          Float
+  createdAt         DateTime  @default(now())
+
+  // Relations
+  transaction       Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  ticketType        EventTicketType  @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([ticketTypeId])
+  @@map("transaction_items")
+}
+
+model TransactionPayment {
+  id                String    @id @default(uuid())
+  transactionId     String    @unique
+  paymentProofUrl   String
+  paymentMethod     String?
+  accountNumber     String?
+  accountName       String?
+  paymentDate       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  transaction       Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@map("transaction_payments")
+}
+
+model Review {
+  id              String    @id @default(uuid())
+  userId          String
+  eventId         String
+  transactionId   String    @unique
+  rating          Int       // 1-5
+  comment         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event           Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([transactionId])
+  @@map("reviews")
+}
+
+model Referral {
+  id                  String    @id @default(uuid())
+  referrerId          String
+  refereeId           String    @unique
+  codeUsed            String
+  isRewardClaimed     Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+
+  // Relations
+  referrer            User      @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referee             User      @relation("Referee", fields: [refereeId], references: [id], onDelete: Cascade)
+  coupons             UserCoupon[]
+
+  @@index([referrerId])
+  @@index([refereeId])
+  @@index([codeUsed])
+  @@map("referrals")
+}
+
+model UserPoint {
+  id              String    @id @default(uuid())
+  userId          String
+  amount          Float
+  sourceType      String    // referral, promotion, etc.
+  sourceId        String?
+  expiryDate      DateTime
+  isExpired       Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiryDate])
+  @@index([isExpired])
+  @@map("user_points")
+}
+
+model CouponTemplate {
+  id                    String    @id @default(uuid())
+  name                  String    @unique
+  description           String?
+  discountType          DiscountType
+  discountValue         Float
+  minPurchaseAmount     Float     @default(0)
+  maxDiscountAmount     Float?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  userCoupons           UserCoupon[]
+
+  @@map("coupon_templates")
+}
+
+model UserCoupon {
+  id                  String    @id @default(uuid())
+  userId              String
+  couponTemplateId    String
+  referralId          String?
+  code                String    @unique
+  isUsed              Boolean   @default(false)
+  expiryDate          DateTime
+  createdAt           DateTime  @default(now())
+
+  // Relations
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  couponTemplate      CouponTemplate @relation(fields: [couponTemplateId], references: [id], onDelete: Cascade)
+  referral            Referral?     @relation(fields: [referralId], references: [id])
+  transactions        Transaction[]
+
+  @@index([userId])
+  @@index([code])
+  @@index([expiryDate])
+  @@index([isUsed])
+  @@map("user_coupons")
+}
+
+model Notification {
+  id              String    @id @default(uuid())
+  userId          String
+  type            String    // transaction_update, event_reminder, etc.
+  title           String
+  message         String
+  isRead          Boolean   @default(false)
+  relatedId       String?   // transaction_id, event_id, etc.
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model EventAttendee {
+  id              String    @id @default(uuid())
+  eventId         String
+  userId          String
+  transactionId   String    @unique
+  ticketCount     Int
+  totalPaid       Float
+  attended        Boolean   @default(false)
+  attendedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  event           Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([userId])
+  @@index([transactionId])
+  @@map("event_attendees")
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
