@@ -18,7 +18,7 @@ export class AuthService {
   }
 
   async register(userData: RegisterRequest) {
-    const { email, password, fullName, phoneNumber, address, referralCode } = userData;
+    const { email, password, fullName, phoneNumber, role, referralCode } = userData;
 
     return prisma.$transaction(async (tx) => {
       const existingUser = await tx.user.findUnique({ where: { email } });
@@ -34,7 +34,7 @@ export class AuthService {
 
       // Create user
       const user = await tx.user.create({
-        data: { email, password: hashedPassword, fullName, phoneNumber, address, referralCode: referralCodeGenerated },
+        data: { email, password: hashedPassword, fullName, phoneNumber, role, referralCode: referralCodeGenerated },
       });
 
       let referralReward = null;

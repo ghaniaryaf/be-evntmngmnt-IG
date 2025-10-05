@@ -14,7 +14,7 @@ export interface RegisterRequest {
   password: string;
   fullName: string;
   phoneNumber?: string;
-  address?: string;
+  role: UserRole;
   referralCode?: string;
 }
 
