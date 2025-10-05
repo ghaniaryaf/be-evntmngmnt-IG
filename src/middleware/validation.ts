@@ -36,9 +36,13 @@ export const validateRegister = [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 }),
   body('fullName').notEmpty().trim(),
+  body('role')
+    .isIn(['CUSTOMER', 'ORGANIZER'])
+    .withMessage('Role harus CUSTOMER atau ORGANIZER'),
   body('phoneNumber').optional().isMobilePhone('any'),
   body('referralCode').optional().isLength({ min: 6, max: 6 }),
 ];
+
 
 export const validateLogin = [
   body('email').isEmail().normalizeEmail(),
